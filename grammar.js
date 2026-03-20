@@ -28,6 +28,7 @@ module.exports = grammar({
   externals: ($) => [
     $._virtual_end_decl,
     $._virtual_open_section,
+    $._virtual_end_section,
     $.block_comment_content,
   ],
 
@@ -287,8 +288,17 @@ module.exports = grammar({
     lambda_expression: ($) =>
       seq("\\", repeat1($._simple_pattern), "->", $._expression),
 
+    // let OPEN binding (NEWLINE binding)* CLOSE in expr
     let_expression: ($) =>
-      seq("let", repeat1(seq($.let_binding, optional($._virtual_end_decl))), "in", $._expression),
+      seq(
+        "let",
+        $._virtual_open_section,
+        $.let_binding,
+        repeat(seq($._virtual_end_decl, $.let_binding)),
+        $._virtual_end_section,
+        "in",
+        $._expression,
+      ),
 
     let_binding: ($) =>
       seq(
@@ -301,8 +311,15 @@ module.exports = grammar({
     if_expression: ($) =>
       seq("if", $._expression, "then", $._expression, "else", $._expression),
 
+    // case expr of OPEN branch (NEWLINE branch)* CLOSE
     case_expression: ($) =>
-      prec.left(seq("case", $._expression, "of", repeat1(seq($.case_branch, optional($._virtual_end_decl))))),
+      seq(
+        "case", $._expression, "of",
+        $._virtual_open_section,
+        $.case_branch,
+        repeat(seq($._virtual_end_decl, $.case_branch)),
+        $._virtual_end_section,
+      ),
 
     case_branch: ($) =>
       seq($._pattern, "->", $._expression),
