@@ -1,0 +1,110 @@
+================================================================================
+If expression
+================================================================================
+
+module Main exposing (main)
+
+main =
+    if x == 1 then "one" else "other"
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (module_declaration
+    (module_name (upper_identifier))
+    (exposing_clause (exposed_value (lower_identifier))))
+  (function_declaration
+    name: (lower_identifier)
+    body: (if_expression
+      (binary_expression
+        (variable_expression (lower_identifier))
+        (integer))
+      (string)
+      (string))))
+
+================================================================================
+Lambda expression
+================================================================================
+
+module Main exposing (main)
+
+main =
+    \x y -> x + y
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (module_declaration
+    (module_name (upper_identifier))
+    (exposing_clause (exposed_value (lower_identifier))))
+  (function_declaration
+    name: (lower_identifier)
+    body: (lambda_expression
+      (variable_pattern (lower_identifier))
+      (variable_pattern (lower_identifier))
+      (binary_expression
+        (variable_expression (lower_identifier))
+        (variable_expression (lower_identifier))))))
+
+================================================================================
+List literal
+================================================================================
+
+module Main exposing (main)
+
+main =
+    [ 1 , 2 , 3 ]
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (module_declaration
+    (module_name (upper_identifier))
+    (exposing_clause (exposed_value (lower_identifier))))
+  (function_declaration
+    name: (lower_identifier)
+    body: (list_expression (integer) (integer) (integer))))
+
+================================================================================
+Record expression
+================================================================================
+
+module Main exposing (main)
+
+main =
+    { name = "Sky" , version = 1 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (module_declaration
+    (module_name (upper_identifier))
+    (exposing_clause (exposed_value (lower_identifier))))
+  (function_declaration
+    name: (lower_identifier)
+    body: (record_expression
+      (record_field
+        name: (lower_identifier)
+        value: (string))
+      (record_field
+        name: (lower_identifier)
+        value: (integer)))))
+
+================================================================================
+Tuple expression
+================================================================================
+
+module Main exposing (main)
+
+main =
+    ( 1 , "hello" )
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (module_declaration
+    (module_name (upper_identifier))
+    (exposing_clause (exposed_value (lower_identifier))))
+  (function_declaration
+    name: (lower_identifier)
+    body: (tuple_expression (integer) (string))))
