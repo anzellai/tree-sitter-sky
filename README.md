@@ -18,7 +18,7 @@ indent = { tab-width = 4, unit = "    " }
 
 [[grammar]]
 name = "sky"
-source = { git = "https://github.com/anzellai/sky-grammar" }
+source = { git = "https://github.com/anzellai/tree-sitter-sky" }
 
 [language-server.sky-lsp]
 command = "sky-lsp"
