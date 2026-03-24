@@ -7,7 +7,11 @@
 //   _virtual_end_decl      (NEWLINE): emitted between siblings at the same indent level
 //   _virtual_end_section   (DEDENT):  emitted when indentation drops below current level
 //
-// The approach follows elm-tree-sitter: open/close/separator as virtual {/}/;
+// Key design decisions:
+//   - Leading commas and operators at line start suppress layout tokens
+//   - Closing delimiters ) ] } on any line close sections
+//   - "in" keyword detected via lookahead WITHOUT consuming characters
+//   - Same-line content after layout keywords uses column tracking via get_column()
 
 #include "tree_sitter/parser.h"
 #include <stdbool.h>
@@ -27,12 +31,8 @@ enum TokenType {
 typedef struct {
   int indent_stack[MAX_INDENT_STACK];
   int stack_len;
-  // Runback buffer for pending tokens when multiple sections need closing
-  // 0 = VIRTUAL_END_DECL, 1 = VIRTUAL_END_SECTION
   uint8_t runback[MAX_RUNBACK];
   int runback_len;
-  int indent_length;  // column of first non-whitespace on current line
-  bool newline_pending; // true when we've seen a newline and need to process it
 } Scanner;
 
 void *tree_sitter_sky_external_scanner_create(void) {
@@ -40,8 +40,6 @@ void *tree_sitter_sky_external_scanner_create(void) {
   s->indent_stack[0] = 0;
   s->stack_len = 1;
   s->runback_len = 0;
-  s->indent_length = 0;
-  s->newline_pending = false;
   return s;
 }
 
@@ -52,31 +50,17 @@ void tree_sitter_sky_external_scanner_destroy(void *payload) {
 unsigned tree_sitter_sky_external_scanner_serialize(void *payload, char *buffer) {
   Scanner *s = (Scanner *)payload;
   unsigned size = 0;
-
-  // Stack length
   buffer[size++] = (char)s->stack_len;
-  // Stack entries
   for (int i = 0; i < s->stack_len && size + 1 < TREE_SITTER_SERIALIZATION_BUFFER_SIZE; i++) {
     int val = s->indent_stack[i];
     buffer[size++] = (char)(val & 0xFF);
     buffer[size++] = (char)((val >> 8) & 0xFF);
   }
-  // Runback length
   if (size < TREE_SITTER_SERIALIZATION_BUFFER_SIZE) {
     buffer[size++] = (char)s->runback_len;
   }
-  // Runback entries
   for (int i = 0; i < s->runback_len && size < TREE_SITTER_SERIALIZATION_BUFFER_SIZE; i++) {
     buffer[size++] = s->runback[i];
-  }
-  // indent_length
-  if (size + 1 < TREE_SITTER_SERIALIZATION_BUFFER_SIZE) {
-    buffer[size++] = (char)(s->indent_length & 0xFF);
-    buffer[size++] = (char)((s->indent_length >> 8) & 0xFF);
-  }
-  // newline_pending
-  if (size < TREE_SITTER_SERIALIZATION_BUFFER_SIZE) {
-    buffer[size++] = s->newline_pending ? 1 : 0;
   }
   return size;
 }
@@ -86,14 +70,10 @@ void tree_sitter_sky_external_scanner_deserialize(void *payload, const char *buf
   s->stack_len = 1;
   s->indent_stack[0] = 0;
   s->runback_len = 0;
-  s->indent_length = 0;
-  s->newline_pending = false;
 
   if (length == 0) return;
 
   unsigned pos = 0;
-
-  // Stack length
   int slen = (unsigned char)buffer[pos++];
   if (slen > MAX_INDENT_STACK) slen = MAX_INDENT_STACK;
   s->stack_len = 0;
@@ -108,8 +88,6 @@ void tree_sitter_sky_external_scanner_deserialize(void *payload, const char *buf
     s->indent_stack[0] = 0;
     s->stack_len = 1;
   }
-
-  // Runback length
   if (pos < length) {
     int rlen = (unsigned char)buffer[pos++];
     if (rlen > MAX_RUNBACK) rlen = MAX_RUNBACK;
@@ -120,30 +98,89 @@ void tree_sitter_sky_external_scanner_deserialize(void *payload, const char *buf
       }
     }
   }
-
-  // indent_length
-  if (pos + 1 < length) {
-    s->indent_length = (unsigned char)buffer[pos] | ((unsigned char)buffer[pos + 1] << 8);
-    pos += 2;
-  }
-
-  // newline_pending
-  if (pos < length) {
-    s->newline_pending = buffer[pos++] != 0;
-  }
 }
 
 static int current_indent(Scanner *s) {
   return s->stack_len > 0 ? s->indent_stack[s->stack_len - 1] : 0;
 }
 
+// Check if a character starts a continuation token that should suppress
+// layout decisions (leading commas, operators, pipes, closing delimiters).
+static bool is_continuation_char(int32_t ch) {
+  return ch == ',' || ch == '|' || ch == ')' || ch == ']' || ch == '}';
+}
+
+// Advance past whitespace (including newlines) to find the column and
+// content of the next significant line. Returns the column of the first
+// non-whitespace character after the last newline.
+static int scan_to_content(TSLexer *lexer, bool *found_newline) {
+  int col = 0;
+  *found_newline = false;
+
+  while (!lexer->eof(lexer)) {
+    int32_t ch = lexer->lookahead;
+    if (ch == '\n' || ch == '\r') {
+      *found_newline = true;
+      col = 0;
+      lexer->advance(lexer, true);
+      // Handle \r\n
+      if (ch == '\r' && !lexer->eof(lexer) && lexer->lookahead == '\n') {
+        lexer->advance(lexer, true);
+      }
+      continue;
+    }
+    if (ch == ' ') {
+      if (*found_newline) col++;
+      lexer->advance(lexer, true);
+      continue;
+    }
+    if (ch == '\t') {
+      if (*found_newline) col += 4;
+      lexer->advance(lexer, true);
+      continue;
+    }
+    // Skip comment-only lines (-- comments don't affect layout)
+    if (*found_newline && ch == '-') {
+      // Peek: is this a line comment?
+      lexer->advance(lexer, true);
+      if (!lexer->eof(lexer) && lexer->lookahead == '-') {
+        // Skip to end of line
+        while (!lexer->eof(lexer) && lexer->lookahead != '\n') {
+          lexer->advance(lexer, true);
+        }
+        continue; // will hit the \n handler above
+      }
+      // Single minus — not a comment. We consumed one char but that's ok
+      // since we're in skip mode. The column is already set.
+      break;
+    }
+    break;
+  }
+  return col;
+}
+
+// Check if lookahead matches "in" followed by whitespace/EOF (keyword, not identifier)
+static bool lookahead_is_in_keyword(TSLexer *lexer) {
+  if (lexer->eof(lexer) || lexer->lookahead != 'i') return false;
+  // We need to peek ahead without consuming. Use mark_end to not extend the token.
+  lexer->mark_end(lexer);
+  lexer->advance(lexer, false);
+  if (lexer->eof(lexer) || lexer->lookahead != 'n') return false;
+  lexer->advance(lexer, false);
+  // "in" must be followed by whitespace, EOF, or certain punctuation (not alphanumeric)
+  if (lexer->eof(lexer)) return true;
+  int32_t after = lexer->lookahead;
+  return after == ' ' || after == '\n' || after == '\r' || after == '\t' ||
+         after == '(' || after == ')' || after == '{' || after == '}' ||
+         after == '[' || after == ']';
+}
+
 bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
   Scanner *s = (Scanner *)payload;
 
-  // Drain runback buffer first
+  // ── 1. Drain runback buffer ──────────────────────────
   if (s->runback_len > 0) {
     uint8_t token_type = s->runback[0];
-    // Shift buffer left
     for (int i = 1; i < s->runback_len; i++) {
       s->runback[i - 1] = s->runback[i];
     }
@@ -157,108 +194,49 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
       lexer->result_symbol = VIRTUAL_END_SECTION;
       return true;
     }
-    // If the buffered token isn't valid, clear remaining runback and fall through
     s->runback_len = 0;
   }
 
-  // Handle VIRTUAL_OPEN_SECTION: immediately push current column
-  // This fires right after "let", "of", etc. without needing a newline
+  // ── 2. VIRTUAL_OPEN_SECTION ──────────────────────────
+  // Fires after layout keywords (let, of, case body, etc.)
   if (valid_symbols[VIRTUAL_OPEN_SECTION]) {
-    // Skip whitespace to find the column of the next significant token
     lexer->mark_end(lexer);
+    if (lexer->eof(lexer)) return false;
 
-    // If we're at EOF, don't open a section
-    if (lexer->eof(lexer)) {
-      return false;
-    }
-
-    // Scan past whitespace (including newlines) to find the next token's column
-    int col = 0;
     bool found_newline = false;
-    while (!lexer->eof(lexer)) {
-      if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
-        found_newline = true;
-        col = 0;
-        lexer->advance(lexer, true);
-        continue;
-      }
-      if (lexer->lookahead == ' ') {
-        col++;
-        lexer->advance(lexer, true);
-        continue;
-      }
-      if (lexer->lookahead == '\t') {
-        col += 4;
-        lexer->advance(lexer, true);
-        continue;
-      }
-      // Found non-whitespace
-      break;
-    }
+    int col = scan_to_content(lexer, &found_newline);
 
-    if (lexer->eof(lexer)) {
-      return false;
-    }
-
-    // Skip line comments to find the actual content
-    while (lexer->lookahead == '-') {
-      lexer->advance(lexer, true);
-      if (lexer->lookahead == '-') {
-        // Line comment - skip to end of line
-        while (!lexer->eof(lexer) && lexer->lookahead != '\n') {
-          lexer->advance(lexer, true);
-        }
-        if (!lexer->eof(lexer)) {
-          lexer->advance(lexer, true); // skip \n
-          col = 0;
-          found_newline = true;
-          // Skip whitespace on next line
-          while (!lexer->eof(lexer) && (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
-            if (lexer->lookahead == ' ') col++;
-            else col += 4;
-            lexer->advance(lexer, true);
-          }
-          continue;
-        }
-        return false;
-      }
-      // Not a comment, just a minus sign - use current col
-      break;
-    }
+    if (lexer->eof(lexer)) return false;
 
     if (!found_newline) {
-      // Same-line content: the column is wherever we are.
-      // We don't have reliable column info for same-line, so push cur+1 as a
-      // sentinel that anything on the next line at the same or lesser indent
-      // will close this section.
-      int sentinel = current_indent(s) + 1;
-      if (s->stack_len < MAX_INDENT_STACK) {
-        s->indent_stack[s->stack_len++] = sentinel;
+      // Same-line: use the lexer's column position.
+      // tree-sitter provides get_column() for the current position.
+      col = lexer->get_column(lexer);
+      // Ensure we're strictly deeper than the current indent
+      if (col <= current_indent(s)) {
+        col = current_indent(s) + 1;
       }
-    } else {
-      // Push the column of the first token on the new line
-      if (s->stack_len < MAX_INDENT_STACK) {
-        s->indent_stack[s->stack_len++] = col;
-      }
+    }
+
+    if (s->stack_len < MAX_INDENT_STACK) {
+      s->indent_stack[s->stack_len++] = col;
     }
 
     lexer->result_symbol = VIRTUAL_OPEN_SECTION;
     return true;
   }
 
-  // For END_DECL and END_SECTION, we need to see a newline first
+  // ── 3. END_DECL / END_SECTION ────────────────────────
   if (!valid_symbols[VIRTUAL_END_DECL] && !valid_symbols[VIRTUAL_END_SECTION]) {
     return false;
   }
 
   lexer->mark_end(lexer);
 
-  // At EOF, emit closing tokens
+  // At EOF, close remaining sections
   if (lexer->eof(lexer)) {
-    if (valid_symbols[VIRTUAL_END_SECTION]) {
-      if (s->stack_len > 1) {
-        s->stack_len--;
-      }
+    if (valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1) {
+      s->stack_len--;
       lexer->result_symbol = VIRTUAL_END_SECTION;
       return true;
     }
@@ -269,7 +247,7 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
     return false;
   }
 
-  // Scan forward through whitespace to find the next line's indentation
+  // Scan forward to find the next line's indentation
   bool saw_newline = false;
   int indent = 0;
 
@@ -287,82 +265,98 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
       return false;
     }
 
-    if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+    int32_t ch = lexer->lookahead;
+
+    if (ch == '\n' || ch == '\r') {
       saw_newline = true;
       indent = 0;
       lexer->advance(lexer, true);
       continue;
     }
 
-    if (saw_newline && (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
-      if (lexer->lookahead == ' ') indent++;
+    if (saw_newline && (ch == ' ' || ch == '\t')) {
+      if (ch == ' ') indent++;
       else indent += 4;
       lexer->advance(lexer, true);
       continue;
     }
 
     if (!saw_newline) {
-      // Check for closing delimiters on the same line
-      // that should trigger end_section (like Elm's approach)
+      // Same-line tokens: check for closing delimiters and "in" keyword
       if (valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1) {
-        if (lexer->lookahead == ')' || lexer->lookahead == ']' || lexer->lookahead == '}') {
+        if (ch == ')' || ch == ']' || ch == '}') {
+          s->stack_len--;
+          lexer->result_symbol = VIRTUAL_END_SECTION;
+          return true;
+        }
+        // "in" keyword closes let sections — detect WITHOUT consuming
+        if (lookahead_is_in_keyword(lexer)) {
           s->stack_len--;
           lexer->result_symbol = VIRTUAL_END_SECTION;
           return true;
         }
       }
-      // Check for 'in' keyword on same line (closes let section)
-      if (valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1) {
-        if (lexer->lookahead == 'i') {
-          lexer->advance(lexer, false);
-          if (lexer->lookahead == 'n') {
-            lexer->advance(lexer, false);
-            // Check it's followed by whitespace or EOF (not part of a longer identifier)
-            if (lexer->eof(lexer) || lexer->lookahead == ' ' || lexer->lookahead == '\n' ||
-                lexer->lookahead == '\r' || lexer->lookahead == '\t') {
-              // This is the 'in' keyword - close the section
-              lexer->mark_end(lexer); // don't consume 'in'
-              s->stack_len--;
-              lexer->result_symbol = VIRTUAL_END_SECTION;
-              return true;
-            }
-          }
-        }
-      }
       return false;
     }
 
-    // Skip blank lines
-    if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+    // Skip blank lines (content is another newline)
+    if (ch == '\n' || ch == '\r') {
       continue;
     }
 
-    // Found non-whitespace after newline
-    break;
-  }
+    // Skip comment-only lines
+    if (ch == '-') {
+      // Peek for line comment
+      lexer->advance(lexer, true);
+      if (!lexer->eof(lexer) && lexer->lookahead == '-') {
+        while (!lexer->eof(lexer) && lexer->lookahead != '\n') {
+          lexer->advance(lexer, true);
+        }
+        continue;
+      }
+      // Not a comment — it's a minus sign or negative number. Use current indent.
+      break;
+    }
 
-  // Skip comment-only lines
-  if (lexer->lookahead == '-') {
-    // Peek ahead to check for line comment
-    // If it's a comment line, treat it as if we haven't found content yet
-    // (comments don't affect layout)
+    // Found non-whitespace content
+    break;
   }
 
   int cur = current_indent(s);
 
-  // Skip layout decisions when the next token is a comma — leading commas at column 0
-  // are continuations (e.g., record fields, list items) not new declarations.
-  if (saw_newline && !lexer->eof(lexer) && lexer->lookahead == ',') {
-    return false;
+  // ── Continuation lines: suppress layout tokens ───────
+  // Lines starting with commas, pipes, operators, or closing delimiters
+  // are continuations of the previous expression, not new declarations.
+  if (saw_newline && !lexer->eof(lexer)) {
+    int32_t ch = lexer->lookahead;
+    if (is_continuation_char(ch)) {
+      return false;
+    }
+
+    // "in" keyword on a new line: close the let section
+    if (valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1) {
+      if (lookahead_is_in_keyword(lexer)) {
+        s->stack_len--;
+        cur = current_indent(s);
+        // Queue additional END_SECTIONs if we need to close multiple levels
+        while (s->stack_len > 1 && indent < cur) {
+          if (s->runback_len < MAX_RUNBACK) {
+            s->runback[s->runback_len++] = 1;
+          }
+          s->stack_len--;
+          cur = current_indent(s);
+        }
+        lexer->result_symbol = VIRTUAL_END_SECTION;
+        return true;
+      }
+    }
   }
 
-  // Dedent: indent < current level -> close sections
+  // ── Dedent ───────────────────────────────────────────
   if (indent < cur && valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1) {
-    // Pop one level, queue additional pops in runback
     s->stack_len--;
     cur = current_indent(s);
 
-    // Queue additional END_SECTION tokens for remaining levels above indent
     while (s->stack_len > 1 && indent < cur) {
       if (s->runback_len < MAX_RUNBACK) {
         s->runback[s->runback_len++] = 1; // VIRTUAL_END_SECTION
@@ -371,7 +365,6 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
       cur = current_indent(s);
     }
 
-    // If after all pops we're at the same level, also queue a NEWLINE
     if (indent == cur && s->runback_len < MAX_RUNBACK) {
       s->runback[s->runback_len++] = 0; // VIRTUAL_END_DECL
     }
@@ -380,13 +373,13 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
     return true;
   }
 
-  // Same level: emit separator
+  // ── Same level ───────────────────────────────────────
   if (indent == cur && valid_symbols[VIRTUAL_END_DECL]) {
     lexer->result_symbol = VIRTUAL_END_DECL;
     return true;
   }
 
-  // Dedent but END_SECTION not valid, try END_DECL
+  // ── Dedent fallback ──────────────────────────────────
   if (indent <= cur && valid_symbols[VIRTUAL_END_DECL]) {
     lexer->result_symbol = VIRTUAL_END_DECL;
     return true;

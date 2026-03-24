@@ -393,11 +393,11 @@ module.exports = grammar({
     float: (_$) => token(/[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/),
 
     string: ($) =>
-      seq(
+      token(seq(
         '"',
-        repeat(choice(/[^"\\]+/, $.escape_sequence)),
+        repeat(choice(/[^"\\]+/, /\\[nrt\\"'0]/, /\\u\{[0-9a-fA-F]+\}/)),
         '"',
-      ),
+      )),
 
     char: ($) =>
       seq("'", choice(/[^'\\]/, $.escape_sequence), "'"),
@@ -409,7 +409,7 @@ module.exports = grammar({
       )),
 
     // ── Comments ───────────────────────────────────────
-    line_comment: (_$) => token(seq("--", /.*/)),
+    line_comment: (_$) => token(prec(-1, seq("--", /.*/))),
 
     block_comment: ($) =>
       seq(
