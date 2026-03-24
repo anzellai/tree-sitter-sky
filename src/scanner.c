@@ -350,6 +350,12 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
 
   int cur = current_indent(s);
 
+  // Skip layout decisions when the next token is a comma — leading commas at column 0
+  // are continuations (e.g., record fields, list items) not new declarations.
+  if (saw_newline && !lexer->eof(lexer) && lexer->lookahead == ',') {
+    return false;
+  }
+
   // Dedent: indent < current level -> close sections
   if (indent < cur && valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1) {
     // Pop one level, queue additional pops in runback

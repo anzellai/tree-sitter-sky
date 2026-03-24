@@ -214,10 +214,10 @@ module.exports = grammar({
       choice(
         prec.left(PREC.OR, seq($._expression, "||", $._expression)),
         prec.left(PREC.AND, seq($._expression, "&&", $._expression)),
-        prec.left(PREC.COMPARE, seq($._expression, choice("==", "!=", "<", "<=", ">", ">="), $._expression)),
+        prec.left(PREC.COMPARE, seq($._expression, choice("==", "!=", "/=", "<", "<=", ">", ">="), $._expression)),
         prec.right(PREC.CONCAT, seq($._expression, "++", $._expression)),
         prec.left(PREC.ADD, seq($._expression, choice("+", "-"), $._expression)),
-        prec.left(PREC.MUL, seq($._expression, choice("*", "/", "%"), $._expression)),
+        prec.left(PREC.MUL, seq($._expression, choice("*", "/", "//", "%"), $._expression)),
         prec.right(PREC.COMPOSE, seq($._expression, choice(">>", "<<"), $._expression)),
         prec.right(PREC.CONS, seq($._expression, "::", $._expression)),
         prec.left(PREC.PIPE, seq($._expression, "|>", $._expression)),
