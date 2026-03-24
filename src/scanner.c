@@ -159,20 +159,37 @@ static int scan_to_content(TSLexer *lexer, bool *found_newline) {
   return col;
 }
 
+// Check if a character could follow a keyword (not part of an identifier)
+static bool is_keyword_boundary(int32_t ch) {
+  return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' ||
+         ch == '(' || ch == ')' || ch == '{' || ch == '}' ||
+         ch == '[' || ch == ']';
+}
+
 // Check if lookahead matches "in" followed by whitespace/EOF (keyword, not identifier)
 static bool lookahead_is_in_keyword(TSLexer *lexer) {
   if (lexer->eof(lexer) || lexer->lookahead != 'i') return false;
-  // We need to peek ahead without consuming. Use mark_end to not extend the token.
   lexer->mark_end(lexer);
   lexer->advance(lexer, false);
   if (lexer->eof(lexer) || lexer->lookahead != 'n') return false;
   lexer->advance(lexer, false);
-  // "in" must be followed by whitespace, EOF, or certain punctuation (not alphanumeric)
   if (lexer->eof(lexer)) return true;
-  int32_t after = lexer->lookahead;
-  return after == ' ' || after == '\n' || after == '\r' || after == '\t' ||
-         after == '(' || after == ')' || after == '{' || after == '}' ||
-         after == '[' || after == ']';
+  return is_keyword_boundary(lexer->lookahead);
+}
+
+// Check if lookahead matches "else" followed by whitespace/EOF
+static bool lookahead_is_else_keyword(TSLexer *lexer) {
+  if (lexer->eof(lexer) || lexer->lookahead != 'e') return false;
+  lexer->mark_end(lexer);
+  lexer->advance(lexer, false);
+  if (lexer->eof(lexer) || lexer->lookahead != 'l') return false;
+  lexer->advance(lexer, false);
+  if (lexer->eof(lexer) || lexer->lookahead != 's') return false;
+  lexer->advance(lexer, false);
+  if (lexer->eof(lexer) || lexer->lookahead != 'e') return false;
+  lexer->advance(lexer, false);
+  if (lexer->eof(lexer)) return true;
+  return is_keyword_boundary(lexer->lookahead);
 }
 
 bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
@@ -334,11 +351,11 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
     }
 
     // "in" keyword on a new line: close the let section
+    // "else" keyword on a new line: close the then section
     if (valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1) {
-      if (lookahead_is_in_keyword(lexer)) {
+      if (lookahead_is_in_keyword(lexer) || lookahead_is_else_keyword(lexer)) {
         s->stack_len--;
         cur = current_indent(s);
-        // Queue additional END_SECTIONs if we need to close multiple levels
         while (s->stack_len > 1 && indent < cur) {
           if (s->runback_len < MAX_RUNBACK) {
             s->runback[s->runback_len++] = 1;
