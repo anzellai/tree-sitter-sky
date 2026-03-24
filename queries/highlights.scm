@@ -111,6 +111,8 @@
 (constructor_pattern
   (upper_identifier) @constructor)
 
+(constructor_ref) @constructor
+
 (as_pattern
   "as" @keyword
   (lower_identifier) @variable)

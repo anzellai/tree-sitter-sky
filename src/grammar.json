@@ -1685,7 +1685,15 @@
         },
         {
           "type": "SYMBOL",
+          "name": "_virtual_open_section"
+        },
+        {
+          "type": "SYMBOL",
           "name": "_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_virtual_end_section"
         },
         {
           "type": "STRING",
@@ -1693,7 +1701,15 @@
         },
         {
           "type": "SYMBOL",
+          "name": "_virtual_open_section"
+        },
+        {
+          "type": "SYMBOL",
           "name": "_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_virtual_end_section"
         }
       ]
     },
@@ -1814,6 +1830,15 @@
         {
           "type": "SYMBOL",
           "name": "parenthesized_pattern"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "upper_identifier"
+          },
+          "named": true,
+          "value": "constructor_ref"
         }
       ]
     },
@@ -2290,6 +2315,10 @@
     [
       "_type_non_func",
       "type_application"
+    ],
+    [
+      "constructor_pattern",
+      "_simple_pattern"
     ]
   ],
   "precedences": [],

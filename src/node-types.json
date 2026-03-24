@@ -8,6 +8,10 @@
       "required": true,
       "types": [
         {
+          "type": "constructor_ref",
+          "named": true
+        },
+        {
           "type": "list_pattern",
           "named": true
         },
@@ -280,6 +284,10 @@
           "named": true
         },
         {
+          "type": "constructor_ref",
+          "named": true
+        },
+        {
           "type": "field_access_expression",
           "named": true
         },
@@ -513,6 +521,10 @@
           "named": true
         },
         {
+          "type": "constructor_ref",
+          "named": true
+        },
+        {
           "type": "list_pattern",
           "named": true
         },
@@ -570,6 +582,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "constructor_ref",
+          "named": true
+        },
         {
           "type": "list_pattern",
           "named": true
@@ -897,6 +913,10 @@
       "required": false,
       "types": [
         {
+          "type": "constructor_ref",
+          "named": true
+        },
+        {
           "type": "list_pattern",
           "named": true
         },
@@ -1136,6 +1156,10 @@
           "named": true
         },
         {
+          "type": "constructor_ref",
+          "named": true
+        },
+        {
           "type": "field_access_expression",
           "named": true
         },
@@ -1260,6 +1284,10 @@
         },
         {
           "type": "constructor_expression",
+          "named": true
+        },
+        {
+          "type": "constructor_ref",
           "named": true
         },
         {
@@ -1608,6 +1636,10 @@
           "named": true
         },
         {
+          "type": "constructor_ref",
+          "named": true
+        },
+        {
           "type": "list_pattern",
           "named": true
         },
@@ -1903,6 +1935,10 @@
         },
         {
           "type": "constructor_pattern",
+          "named": true
+        },
+        {
+          "type": "constructor_ref",
           "named": true
         },
         {
@@ -2410,6 +2446,10 @@
         },
         {
           "type": "constructor_pattern",
+          "named": true
+        },
+        {
+          "type": "constructor_ref",
           "named": true
         },
         {
@@ -2935,6 +2975,10 @@
   {
     "type": "case",
     "named": false
+  },
+  {
+    "type": "constructor_ref",
+    "named": true
   },
   {
     "type": "double_dot",

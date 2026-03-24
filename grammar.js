@@ -36,6 +36,7 @@ module.exports = grammar({
     [$.function_declaration, $.type_annotation_declaration],
     [$.record_expression, $.record_update_expression],
     [$._type_non_func, $.type_application],
+    [$.constructor_pattern, $._simple_pattern],
   ],
 
   rules: {
@@ -309,7 +310,13 @@ module.exports = grammar({
       ),
 
     if_expression: ($) =>
-      seq("if", $._expression, "then", $._expression, "else", $._expression),
+      seq(
+        "if", $._expression,
+        "then",
+        $._virtual_open_section, $._expression, $._virtual_end_section,
+        "else",
+        $._virtual_open_section, $._expression, $._virtual_end_section,
+      ),
 
     // case expr of OPEN branch (NEWLINE branch)* CLOSE
     case_expression: ($) =>
@@ -343,6 +350,7 @@ module.exports = grammar({
         $.unit_pattern,
         $.record_pattern,
         $.parenthesized_pattern,
+        alias($.upper_identifier, $.constructor_ref),
       ),
 
     constructor_pattern: ($) =>
