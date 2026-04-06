@@ -403,7 +403,13 @@ module.exports = grammar({
     string: ($) =>
       token(seq(
         '"',
-        repeat(choice(/[^"\\]+/, /\\[nrt\\"'0]/, /\\u\{[0-9a-fA-F]+\}/)),
+        repeat(choice(
+          /[^"\\]+/,
+          /\\[nrt\\"'0]/,
+          /\\u\{[0-9a-fA-F]+\}/,
+          /\\u[0-9a-fA-F]{4}/,
+          /\\U[0-9a-fA-F]{8}/,
+        )),
         '"',
       )),
 
@@ -414,6 +420,8 @@ module.exports = grammar({
       token.immediate(choice(
         /\\[nrt\\"'0]/,
         /\\u\{[0-9a-fA-F]+\}/,
+        /\\u[0-9a-fA-F]{4}/,
+        /\\U[0-9a-fA-F]{8}/,
       )),
 
     // ── Comments ───────────────────────────────────────
