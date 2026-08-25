@@ -109,9 +109,15 @@ module.exports = grammar({
       ),
 
     // ── Function ───────────────────────────────────────
+    // The name is usually lower-case, but Sky permits an UPPER-case top-level
+    // binding — a hand-written record "smart constructor" like
+    // `Profile name age active = { … }` paired with `Profile : … -> Profile`
+    // (see examples/06-json). `type_annotation_declaration` already allows an
+    // upper name, and the declared conflict between the two disambiguates on
+    // `:` vs `pattern* =`.
     function_declaration: ($) =>
       seq(
-        field("name", $.lower_identifier),
+        field("name", choice($.lower_identifier, $.upper_identifier)),
         repeat($._simple_pattern),
         "=",
         field("body", $._expression),
@@ -193,7 +199,7 @@ module.exports = grammar({
       seq("(", $._type_expression, ",", commaSep1($._type_expression), ")"),
 
     record_type: ($) =>
-      seq("{", commaSep1($.record_type_field), "}"),
+      seq("{", optional(commaSep1($.record_type_field)), "}"),
 
     record_type_field: ($) =>
       seq(field("name", $.lower_identifier), ":", field("type", $._type_expression)),
@@ -240,6 +246,7 @@ module.exports = grammar({
         $.constructor_expression,
         $.integer,
         $.float,
+        $.multiline_string,
         $.string,
         $.char,
         $.lambda_expression,
@@ -278,7 +285,7 @@ module.exports = grammar({
       seq("[", optional(commaSep1($._expression)), "]"),
 
     record_expression: ($) =>
-      seq("{", commaSep1($.record_field), "}"),
+      seq("{", optional(commaSep1($.record_field)), "}"),
 
     record_field: ($) =>
       seq(field("name", $.lower_identifier), "=", field("value", $._expression)),
@@ -301,9 +308,14 @@ module.exports = grammar({
         $._expression,
       ),
 
+    // A let binding is either a value (`x = e`, `(a, b) = e`) or a function
+    // (`f x y = e`) — the trailing patterns are the parameters, mirroring a
+    // top-level `function_declaration`. Without the `repeat`, any `let f x = …`
+    // (very common — e.g. `cors h = Middleware.withCors …`) failed to parse.
     let_binding: ($) =>
       seq(
         $._simple_pattern,
+        repeat($._simple_pattern),
         optional(seq(":", $._type_expression)),
         "=",
         $._expression,
@@ -413,6 +425,25 @@ module.exports = grammar({
         '"',
       )),
 
+    // Triple-quoted multi-line string (`"""…"""`). Spans newlines and may embed
+    // single/double `"` (but not `"""`), so it is a single token — leading-quote
+    // maximal-munch makes the lexer prefer this over `string` at `"""`. Sky's
+    // `{{expr}}` interpolation and `\{{` escape live INSIDE the literal here (a
+    // highlights query can pick the `{{…}}` spans out); modelling them as child
+    // nodes would need the content to stop at `{{`, which a single token cannot
+    // express. The content alternatives forbid `"""` by only ever consuming a
+    // run of non-quotes, a lone `"`, or a `""`, each followed by a non-quote.
+    multiline_string: (_$) =>
+      token(seq(
+        '"""',
+        repeat(choice(
+          /[^"]+/,
+          /"[^"]/,
+          /""[^"]/,
+        )),
+        '"""',
+      )),
+
     char: ($) =>
       seq("'", choice(/[^'\\]/, $.escape_sequence), "'"),
 
@@ -425,7 +456,13 @@ module.exports = grammar({
       )),
 
     // ── Comments ───────────────────────────────────────
-    line_comment: (_$) => token(prec(-1, seq("--", /.*/))),
+    // `--` is ALWAYS a line comment, never two `-` operators. It needs a
+    // POSITIVE lexical precedence so it wins over the `-` (minus / negate) token
+    // in expression position — otherwise `[ -- note` at the head of a list lexes
+    // `--` as `-` `-` and the comment's words become an expression. Sky has no
+    // `--` operator, so preferring the comment is unambiguous. (A `--` inside a
+    // string/char is part of that token and never reaches here.)
+    line_comment: (_$) => token(prec(1, seq("--", /.*/))),
 
     block_comment: ($) =>
       seq(

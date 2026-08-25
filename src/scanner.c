@@ -340,8 +340,32 @@ bool tree_sitter_sky_external_scanner_scan(void *payload, TSLexer *lexer, const 
   // ── Continuation lines ───────────────────────────────
   if (saw_newline && !lexer->eof(lexer)) {
     int32_t ch = lexer->lookahead;
-    if (is_continuation_char(ch))
+    if (is_continuation_char(ch)) {
+      // A continuation char (`,` or `|`) belongs to an OUTER construct — the
+      // next field of a record, the next element of a list/tuple, the next
+      // variant of a type. But if a virtual section (an if/then/else body, a
+      // let, a case) is still open DEEPER than this line's indent, it must
+      // close FIRST. Otherwise the inner section lingers on the stack and a
+      // later dedent pops it in place of the outer section it belongs to,
+      // closing the enclosing `case`/`let` one level too early — the bug that
+      // hit a record-update whose field is a multi-line `if … else …` wrapped
+      // in a `( …, Cmd.none )` tuple in a case branch: the next branch fell out
+      // of the case as an ERROR. Close the inner section(s) here (no END_DECL —
+      // the construct continues); the continuation char resumes the outer
+      // construct on the next scan.
+      if (valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1 && indent < cur) {
+        s->stack_len--;
+        cur = current_indent(s);
+        while (s->stack_len > 1 && indent < cur) {
+          if (s->runback_len < MAX_RUNBACK) s->runback[s->runback_len++] = 1;
+          s->stack_len--;
+          cur = current_indent(s);
+        }
+        lexer->result_symbol = VIRTUAL_END_SECTION;
+        return true;
+      }
       return false;
+    }
 
     // "in" on new line: close let section
     if (valid_symbols[VIRTUAL_END_SECTION] && s->stack_len > 1 && lookahead_is_in(lexer)) {

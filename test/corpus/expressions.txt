@@ -108,3 +108,88 @@ main =
   (function_declaration
     name: (lower_identifier)
     body: (tuple_expression (integer) (string))))
+
+================================================================================
+If inside a tuple in a case branch
+================================================================================
+
+f m =
+    case m of
+        A ->
+            ( if a then
+                b
+
+              else
+                c
+            , d
+            )
+
+        B ->
+            e
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    name: (lower_identifier)
+    (variable_pattern
+      (lower_identifier))
+    body: (case_expression
+      (variable_expression
+        (lower_identifier))
+      (case_branch
+        (constructor_pattern
+          (upper_identifier))
+        (tuple_expression
+          (if_expression
+            (variable_expression
+              (lower_identifier))
+            (variable_expression
+              (lower_identifier))
+            (variable_expression
+              (lower_identifier)))
+          (variable_expression
+            (lower_identifier))))
+      (case_branch
+        (constructor_pattern
+          (upper_identifier))
+        (variable_expression
+          (lower_identifier))))))
+
+================================================================================
+Multi-line string with interpolation
+================================================================================
+
+greeting =
+    """Hello {{name}},
+your score is {{toString score}}.
+Braces \{{ are escaped."""
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    name: (lower_identifier)
+    body: (multiline_string)))
+
+================================================================================
+Comment inside a list
+================================================================================
+
+x =
+    [ -- comment
+      a
+    , b
+    ]
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    name: (lower_identifier)
+    body: (list_expression
+      (line_comment)
+      (variable_expression
+        (lower_identifier))
+      (variable_expression
+        (lower_identifier)))))

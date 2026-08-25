@@ -111,3 +111,81 @@ type alias Model =
       (record_type_field
         name: (lower_identifier)
         type: (type_reference (upper_identifier))))))
+
+================================================================================
+Function-style let binding and empty record type
+================================================================================
+
+run cfg =
+    let
+        cors h =
+            wrap cfg h
+    in
+    cors handler
+
+
+init : {} -> Int
+init _ =
+    0
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    name: (lower_identifier)
+    (variable_pattern
+      (lower_identifier))
+    body: (let_expression
+      (let_binding
+        (variable_pattern
+          (lower_identifier))
+        (variable_pattern
+          (lower_identifier))
+        (call_expression
+          (variable_expression
+            (lower_identifier))
+          (variable_expression
+            (lower_identifier))
+          (variable_expression
+            (lower_identifier))))
+      (call_expression
+        (variable_expression
+          (lower_identifier))
+        (variable_expression
+          (lower_identifier)))))
+  (type_annotation_declaration
+    name: (lower_identifier)
+    type: (function_type
+      (record_type)
+      (type_reference
+        (upper_identifier))))
+  (function_declaration
+    name: (lower_identifier)
+    (wildcard_pattern)
+    body: (integer)))
+
+================================================================================
+Uppercase smart-constructor function
+================================================================================
+
+Profile name age =
+    { name = name, age = age }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    name: (upper_identifier)
+    (variable_pattern
+      (lower_identifier))
+    (variable_pattern
+      (lower_identifier))
+    body: (record_expression
+      (record_field
+        name: (lower_identifier)
+        value: (variable_expression
+          (lower_identifier)))
+      (record_field
+        name: (lower_identifier)
+        value: (variable_expression
+          (lower_identifier))))))

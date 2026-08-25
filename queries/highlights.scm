@@ -142,6 +142,7 @@
 (integer) @constant.numeric.integer
 (float) @constant.numeric.float
 (string) @string
+(multiline_string) @string
 (char) @constant.character
 (escape_sequence) @constant.character.escape
 

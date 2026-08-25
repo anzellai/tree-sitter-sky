@@ -111,6 +111,10 @@
           "named": true
         },
         {
+          "type": "multiline_string",
+          "named": true
+        },
+        {
           "type": "negate_expression",
           "named": true
         },
@@ -210,6 +214,10 @@
         },
         {
           "type": "list_expression",
+          "named": true
+        },
+        {
+          "type": "multiline_string",
           "named": true
         },
         {
@@ -325,6 +333,10 @@
         },
         {
           "type": "literal_pattern",
+          "named": true
+        },
+        {
+          "type": "multiline_string",
           "named": true
         },
         {
@@ -448,6 +460,10 @@
         },
         {
           "type": "list_expression",
+          "named": true
+        },
+        {
+          "type": "multiline_string",
           "named": true
         },
         {
@@ -739,6 +755,10 @@
           "named": true
         },
         {
+          "type": "multiline_string",
+          "named": true
+        },
+        {
           "type": "parenthesized_expression",
           "named": true
         },
@@ -864,6 +884,10 @@
             "named": true
           },
           {
+            "type": "multiline_string",
+            "named": true
+          },
+          {
             "type": "negate_expression",
             "named": true
           },
@@ -903,6 +927,10 @@
         "types": [
           {
             "type": "lower_identifier",
+            "named": true
+          },
+          {
+            "type": "upper_identifier",
             "named": true
           }
         ]
@@ -1055,6 +1083,10 @@
           "named": true
         },
         {
+          "type": "multiline_string",
+          "named": true
+        },
+        {
           "type": "negate_expression",
           "named": true
         },
@@ -1200,6 +1232,10 @@
           "named": true
         },
         {
+          "type": "multiline_string",
+          "named": true
+        },
+        {
           "type": "negate_expression",
           "named": true
         },
@@ -1332,6 +1368,10 @@
         },
         {
           "type": "literal_pattern",
+          "named": true
+        },
+        {
+          "type": "multiline_string",
           "named": true
         },
         {
@@ -1486,6 +1526,10 @@
           "named": true
         },
         {
+          "type": "multiline_string",
+          "named": true
+        },
+        {
           "type": "negate_expression",
           "named": true
         },
@@ -1578,6 +1622,10 @@
         },
         {
           "type": "list_expression",
+          "named": true
+        },
+        {
+          "type": "multiline_string",
           "named": true
         },
         {
@@ -1792,6 +1840,10 @@
           "named": true
         },
         {
+          "type": "multiline_string",
+          "named": true
+        },
+        {
           "type": "parenthesized_expression",
           "named": true
         },
@@ -1880,6 +1932,10 @@
         },
         {
           "type": "list_expression",
+          "named": true
+        },
+        {
+          "type": "multiline_string",
           "named": true
         },
         {
@@ -2072,7 +2128,7 @@
     "fields": {},
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
           "type": "record_field",
@@ -2152,6 +2208,10 @@
             "named": true
           },
           {
+            "type": "multiline_string",
+            "named": true
+          },
+          {
             "type": "negate_expression",
             "named": true
           },
@@ -2208,7 +2268,7 @@
     "fields": {},
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
           "type": "record_type_field",
@@ -2391,6 +2451,10 @@
         },
         {
           "type": "list_expression",
+          "named": true
+        },
+        {
+          "type": "multiline_string",
           "named": true
         },
         {
@@ -3035,6 +3099,10 @@
   {
     "type": "module",
     "named": false
+  },
+  {
+    "type": "multiline_string",
+    "named": true
   },
   {
     "type": "of",
